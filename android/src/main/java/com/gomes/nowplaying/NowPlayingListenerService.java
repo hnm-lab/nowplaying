@@ -5,9 +5,12 @@ import android.content.Intent;
 import android.media.session.MediaController;
 import android.media.session.MediaSession;
 import android.media.session.PlaybackState;
+import android.os.Build;
 import android.os.Bundle;
 import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
+import android.util.Log;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -37,7 +40,7 @@ public class NowPlayingListenerService extends NotificationListenerService {
     public static final String ACTION_POSTED = "posted";
     public static final String ACTION_REMOVED = "removed";
 
-    private Map<String, MediaSession.Token> tokens = new HashMap<>();
+    private final Map<String, MediaSession.Token> tokens = new HashMap<>();
 
     @Override
     public void onListenerConnected() {
@@ -57,11 +60,14 @@ public class NowPlayingListenerService extends NotificationListenerService {
             final MediaSession.Token token = getTokenIfAvailable(sbn);
             if (token != null) {
                 final MediaController controller = new MediaController(this, token);
-                final int playbackState = controller.getPlaybackState().getState();
-                if (playbackState == PlaybackState.STATE_PLAYING)
-                    playingToken = new SbnAndToken(sbn, token);
-                if (playbackState == PlaybackState.STATE_PAUSED)
-                    pausedToken = new SbnAndToken(sbn, token);
+                PlaybackState playbackState = controller.getPlaybackState();
+                if (playbackState != null) {
+                    final int playbackStateNum = playbackState.getState();
+                    if (playbackStateNum == PlaybackState.STATE_PLAYING)
+                        playingToken = new SbnAndToken(sbn, token);
+                    if (playbackStateNum == PlaybackState.STATE_PAUSED)
+                        pausedToken = new SbnAndToken(sbn, token);
+                }
             }
         }
 
@@ -90,17 +96,19 @@ public class NowPlayingListenerService extends NotificationListenerService {
         final Intent intent = new Intent(NowPlayingPlugin.ACTION);
         intent.putExtra(FIELD_ACTION, action);
         intent.putExtra(FIELD_TOKEN, token);
-        intent.putExtra(FIELD_ICON, sbn.getNotification().getSmallIcon());
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            intent.putExtra(FIELD_ICON, sbn.getNotification().getSmallIcon());
+        }
         sendBroadcast(intent);
     }
 
     private MediaSession.Token getTokenIfAvailable(StatusBarNotification sbn) {
         final Notification notif = sbn.getNotification();
         final Bundle bundle = notif.extras;
-        return (MediaSession.Token) bundle.getParcelable("android.mediaSession");
+        return bundle.getParcelable("android.mediaSession");
     }
 
-    private class SbnAndToken {
+    private static class SbnAndToken {
         protected final StatusBarNotification sbn;
         protected final MediaSession.Token token;
 
